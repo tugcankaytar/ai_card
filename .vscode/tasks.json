@@ -12,6 +12,13 @@
             "problemMatcher": []
         },
         {
+            "label": "Live circuit view (http://localhost:8090)",
+            "type": "shell",
+            "command": "node viz/server.js",
+            "isBackground": true,
+            "problemMatcher": []
+        },
+        {
             "label": "Waveforms (GTKWave)",
             "type": "shell",
             "command": "gtkwave tb.gtkw",

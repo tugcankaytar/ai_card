@@ -90,8 +90,10 @@ Takeaways:
 - **v3**: scaled up to 64 x 20 x 100 with a shared decoder and 5 lanes (above).
 
 ## Setup (Windows)
-Install **OSS CAD Suite** (iverilog, yosys, gtkwave in one package):
-1. Download the `windows-x64` release from github.com/YosysHQ/oss-cad-suite-build
+Install **[OSS CAD Suite](https://github.com/YosysHQ/oss-cad-suite-build)**
+(iverilog, yosys, gtkwave in one package):
+1. Download the `windows-x64` file from the
+   [Releases page](https://github.com/YosysHQ/oss-cad-suite-build/releases)
 2. Extract it, e.g. into the project folder as `oss-cad-suite/` (git-ignored)
 3. Add its `bin` and `lib` folders to PATH and restart VS Code
 4. Check: `iverilog -V` and `yosys -V`
@@ -111,6 +113,18 @@ Gate counts:
     yosys -p "read_verilog -sv pkt_decoder.v ws_cell.v; synth -top ws_cell; stat; ltp -noff"
 
 ## Viewing the circuit
+- **Live circuit view** (needs only Node.js, no packages):
+
+      node viz/server.js
+
+  then open http://localhost:8090. The server runs the real simulation,
+  turns `tb.vcd` into one frame per clock cycle and shows the array as a
+  diagram: packed bytes and decoders lighting up while weights load, the
+  5-input bus, and all 64 neurons with their accumulators and the +/-/gated
+  state of each lane. Play, pause or step cycle by cycle; click a neuron to
+  see its stored weights and the lane-by-lane sum. Saving any `.v` file
+  re-runs the simulation and the page updates by itself.
+  In VS Code: **Tasks: Run Task -> Live circuit view**.
 - **Waveforms**: `gtkwave tb.gtkw` opens `tb.vcd` with load, compute and
   neuron 0/1 accumulator signals already arranged.
 - **Schematic (local)**: `yosys -p "read_verilog -sv ws_cell.v; proc; opt; show"`

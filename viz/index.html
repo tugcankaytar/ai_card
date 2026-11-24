@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live Circuit View</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --ink: #1c2330; --muted: #6b7686; --line: #d5dbe3;
+  --wire: #b9c2ce; --live: #2f7de1; --load: #e08a1e; --pos: #2e9e5b; --neg: #d6453d;
+  --gated: #c3c9d2; --ok: #2e9e5b; --bad: #d6453d; --hl: #fff4d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12161d; --panel: #1a2029; --ink: #e6eaf0; --muted: #8b96a6; --line: #2c3542;
+    --wire: #3a4554; --live: #5aa2ff; --load: #f0a443; --pos: #4cc27e; --neg: #f06a62;
+    --gated: #3c4655; --ok: #4cc27e; --bad: #f06a62; --hl: #3a3220;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+       font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center;
+         padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
+         position: sticky; top: 0; z-index: 2; }
+h1 { font-size: 16px; margin: 0 8px 0 0; }
+button { font: inherit; padding: 5px 12px; border-radius: 6px; border: 1px solid var(--line);
+         background: var(--bg); color: var(--ink); cursor: pointer; }
+button:hover { border-color: var(--live); }
+button.primary { background: var(--live); border-color: var(--live); color: #fff; }
+.group { display: flex; gap: 6px; align-items: center; }
+.pill { padding: 3px 10px; border-radius: 99px; font-size: 12px; border: 1px solid var(--line); }
+.pill.ok { color: var(--ok); border-color: var(--ok); }
+.pill.bad { color: var(--bad); border-color: var(--bad); }
+.pill.run { color: var(--live); border-color: var(--live); }
+#scrub { flex: 1 1 240px; min-width: 160px; }
+.mono { font-family: ui-monospace, Consolas, monospace; }
+main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; padding: 16px; }
+@media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+.card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+           margin: 0 0 8px; }
+svg { width: 100%; height: auto; display: block; }
+svg text { fill: var(--ink); font-family: ui-monospace, Consolas, monospace; }
+.muted { color: var(--muted); fill: var(--muted); }
+svg .muted { fill: var(--muted); }
+.box { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; }
+.box.on { stroke: var(--live); }
+.box.loadon { stroke: var(--load); }
+.wire { stroke: var(--wire); stroke-width: 3; fill: none; }
+.wire.on { stroke: var(--live); stroke-dasharray: 8 6; animation: flow .5s linear infinite; }
+.wire.loadon { stroke: var(--load); stroke-dasharray: 8 6; animation: flow .5s linear infinite; }
+@keyframes flow { to { stroke-dashoffset: -14; } }
+.tile rect.bg { stroke: var(--line); stroke-width: 1; transition: fill .15s; cursor: pointer; }
+.tile.sel rect.bg { stroke: var(--ink); stroke-width: 2.5; }
+.tile.loaded rect.bg { stroke: var(--load); stroke-width: 3; }
+.tile.done rect.bg { stroke: var(--ok); stroke-width: 2.5; }
+.lane-pos { fill: var(--pos); } .lane-neg { fill: var(--neg); } .lane-off { fill: var(--gated); }
+table { border-collapse: collapse; width: 100%; }
+td, th { padding: 3px 6px; text-align: right; font-family: ui-monospace, Consolas, monospace; }
+th { color: var(--muted); font-weight: 500; }
+tr.cur td { background: var(--hl); }
+.w { display: inline-block; width: 18px; text-align: center; border-radius: 4px; margin: 1px; }
+.w.p { background: var(--pos); color: #fff; } .w.n { background: var(--neg); color: #fff; }
+.w.z { background: var(--gated); color: var(--muted); }
+.w.cur { outline: 2px solid var(--live); }
+pre { margin: 0; max-height: 240px; overflow: auto; font-size: 12px; white-space: pre-wrap; }
+.stat { display: flex; justify-content: space-between; padding: 2px 0; }
+.stat b { font-family: ui-monospace, Consolas, monospace; }
+#phase { font-weight: 600; }
+.legend span { margin-right: 12px; font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px;
+            vertical-align: -1px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Live circuit view</h1>
+  <span id="status" class="pill">connecting</span>
+  <div class="group">
+    <button id="run" class="primary" title="Re-run the Verilog simulation">Run simulation</button>
+    <button id="back" title="Previous cycle (Left arrow)">&#9664;</button>
+    <button id="play" title="Play / pause (Space)">Play</button>
+    <button id="fwd" title="Next cycle (Right arrow)">&#9654;</button>
+  </div>
+  <label class="group">Speed <input id="speed" type="range" min="1" max="60" value="8">
+    <span id="speedv" class="mono">8</span>/s</label>
+  <input id="scrub" type="range" min="0" max="0" value="0">
+  <span class="mono">cycle <b id="cyc">0</b>/<span id="ncyc">0</span></span>
+  <span id="phase"></span>
+</header>
+
+<main>
+  <div>
+    <div class="card">
+      <svg id="chip" viewBox="0 0 1000 690" role="img" aria-label="ws_array circuit"></svg>
+      <div class="legend">
+        <span><i style="background:var(--pos)"></i>lane +x</span>
+        <span><i style="background:var(--neg)"></i>lane -x</span>
+        <span><i style="background:var(--gated)"></i>lane gated (weight 0)</span>
+        <span><i style="background:var(--load)"></i>weights written</span>
+        <span><i style="background:var(--ok)"></i>token result latched in y</span>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h2>Simulation output</h2>
+      <pre id="log" class="mono"></pre>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <h2>Neuron <span id="selname">0</span> (click a tile)</h2>
+      <div id="weights"></div>
+      <table id="lanes" style="margin-top:8px"></table>
+      <div id="sums" style="margin-top:8px"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h2>This cycle</h2>
+      <div id="stats"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const NS = 'http://www.w3.org/2000/svg';
+let data = null, idx = 0, playing = false, sel = 0, timer = null, maxAbs = 1;
+
+// ------------------------------------------------------------ helpers
+function el(tag, attrs, parent, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+const signed = (v, bits) => v === null || v === undefined ? null : (v >= 2 ** (bits - 1) ? v - 2 ** bits : v);
+const field = (v, lsb, bits) => v === null ? null : Math.floor(v / 2 ** lsb) % 2 ** bits;
+const code2w = (c) => c === 1 ? 1 : c === 2 ? -1 : 0;
+const wsym = (c) => c === 1 ? '+' : c === 2 ? '-' : '0';
+const fmt = (v) => v === null || v === undefined ? 'x' : String(v);
+function laneX(f, j) { return signed(field(f.xv, 8 * j, 8), 8); }
+function accColor(v) {
+  if (v === null) return 'var(--panel)';
+  const a = Math.min(1, Math.abs(v) / maxAbs);
+  const rgb = v >= 0 ? '47,125,225' : '214,69,61';
+  return `rgba(${rgb},${(0.08 + 0.62 * a).toFixed(3)})`;
+}
+
+// ------------------------------------------------------------ static diagram
+let refs = {};
+function buildDiagram() {
+  const svg = $('chip'); svg.innerHTML = '';
+  const N = data.N, G = data.G;
+  refs = { tiles: [], dec: [], xv: [] };
+
+  // Load path (left)
+  el('text', { x: 20, y: 24, class: 'muted', 'font-size': 13 }, svg, 'LOAD PATH');
+  refs.pkBox = el('rect', { x: 20, y: 40, width: 200, height: 56, rx: 8, class: 'box' }, svg);
+  el('text', { x: 30, y: 60, 'font-size': 12, class: 'muted' }, svg, 'load_pk (packed bytes)');
+  refs.pk = el('text', { x: 30, y: 84, 'font-size': 15 }, svg, '');
+  refs.w1 = el('path', { d: 'M120 96 V120', class: 'wire' }, svg);
+  for (let g = 0; g < G; g++) {
+    const y = 124 + g * 74;
+    const b = el('rect', { x: 20, y, width: 200, height: 60, rx: 8, class: 'box' }, svg);
+    el('text', { x: 30, y: y + 20, 'font-size': 12, class: 'muted' }, svg, `pkt_decoder dec[${g}]`);
+    const t = el('text', { x: 30, y: y + 46, 'font-size': 18, 'letter-spacing': 4 }, svg, '');
+    refs.dec.push({ b, t });
+  }
+  const regY = 124 + G * 74 + 10;
+  refs.w2 = el('path', { d: `M120 ${regY - 24} V${regY}`, class: 'wire' }, svg);
+  refs.regBox = el('rect', { x: 20, y: regY, width: 200, height: 60, rx: 8, class: 'box' }, svg);
+  el('text', { x: 30, y: regY + 20, 'font-size': 12, class: 'muted' }, svg, 'pipeline register');
+  refs.reg = el('text', { x: 30, y: regY + 46, 'font-size': 15 }, svg, '');
+  refs.w3 = el('path', { d: `M220 ${regY + 30} H260 V400 H300`, class: 'wire' }, svg);
+
+  // Input bus (top)
+  el('text', { x: 300, y: 24, class: 'muted', 'font-size': 13 }, svg, 'INPUT BUS  xv: 5 inputs / cycle, broadcast to every neuron');
+  for (let j = 0; j < 5; j++) {
+    const x = 300 + j * 96;
+    const b = el('rect', { x, y: 40, width: 86, height: 44, rx: 8, class: 'box' }, svg);
+    el('text', { x: x + 8, y: 56, 'font-size': 11, class: 'muted' }, svg, `lane ${j}`);
+    const t = el('text', { x: x + 8, y: 77, 'font-size': 16 }, svg, '');
+    refs.xv.push({ b, t });
+  }
+  refs.ctl = el('text', { x: 790, y: 56, 'font-size': 13 }, svg, '');
+  refs.ctl2 = el('text', { x: 790, y: 78, 'font-size': 13 }, svg, '');
+  refs.wx = el('path', { d: 'M540 84 V104', class: 'wire' }, svg);
+
+  // Neuron grid
+  const cols = Math.ceil(Math.sqrt(N)), rows = Math.ceil(N / cols);
+  const gx = 300, gy = 108, tw = Math.min(84, 680 / cols), th = Math.min(70, 560 / rows);
+  for (let i = 0; i < N; i++) {
+    const x = gx + (i % cols) * tw, y = gy + Math.floor(i / cols) * th;
+    const g = el('g', { class: 'tile' }, svg);
+    const bg = el('rect', { x: x + 2, y: y + 2, width: tw - 4, height: th - 4, rx: 6, class: 'bg' }, g);
+    el('text', { x: x + 8, y: y + 17, 'font-size': 10, class: 'muted' }, g, `n${i}`);
+    const yv = el('text', { x: x + tw - 8, y: y + 17, 'font-size': 10, 'text-anchor': 'end', class: 'muted' }, g, '');
+    const acc = el('text', { x: x + tw / 2, y: y + 39, 'font-size': 15, 'text-anchor': 'middle' }, g, '');
+    const lanes = [];
+    for (let j = 0; j < 5; j++)
+      lanes.push(el('circle', { cx: x + tw / 2 + (j - 2) * 12, cy: y + th - 14, r: 4.5, class: 'lane-off' }, g));
+    g.addEventListener('click', () => { sel = i; render(); });
+    refs.tiles.push({ g, bg, acc, yv, lanes });
+  }
+}
+
+// ------------------------------------------------------------ per-frame render
+function render() {
+  if (!data || !data.frames.length) return;
+  const f = data.frames[idx], N = data.N, G = data.G, AW = data.widths.acc;
+  $('cyc').textContent = idx; $('ncyc').textContent = data.frames.length - 1;
+  $('scrub').value = idx;
+
+  let phase;
+  if (f.rst) phase = 'RESET';
+  else if (f.load) phase = `LOAD  neuron row ${f.load_row}`;
+  else if (f.en) phase = `COMPUTE  token ${f.token}, group ${f.group}${f.last ? ' (last)' : ''}`;
+  else if (f.ld_en) phase = 'LOAD  pipeline drains';
+  else phase = 'IDLE';
+  $('phase').textContent = phase;
+
+  // Load path
+  const loading = !!f.load;
+  refs.pkBox.setAttribute('class', 'box' + (loading ? ' loadon' : ''));
+  refs.w1.setAttribute('class', 'wire' + (loading ? ' loadon' : ''));
+  const bytes = [];
+  for (let g = 0; g < G; g++) bytes.push(fmt(field(f.load_pk, 8 * g, 8)));
+  refs.pk.textContent = loading ? bytes.join('  ') : '-';
+  for (let g = 0; g < G; g++) {
+    const w = f.dec[g];
+    let s = '';
+    for (let k = 0; k < 5; k++) s += wsym(field(w, 2 * k, 2));
+    refs.dec[g].t.textContent = loading ? s : '';
+    refs.dec[g].b.setAttribute('class', 'box' + (loading ? ' loadon' : ''));
+  }
+  refs.w2.setAttribute('class', 'wire' + (loading ? ' loadon' : ''));
+  refs.regBox.setAttribute('class', 'box' + (f.ld_en ? ' loadon' : ''));
+  refs.w3.setAttribute('class', 'wire' + (f.ld_en ? ' loadon' : ''));
+  refs.reg.textContent = f.ld_en ? `write -> neuron ${f.ld_row}` : 'idle';
+
+  // Input bus
+  for (let j = 0; j < 5; j++) {
+    refs.xv[j].t.textContent = f.en ? fmt(laneX(f, j)) : '-';
+    refs.xv[j].b.setAttribute('class', 'box' + (f.en ? ' on' : ''));
+  }
+  refs.wx.setAttribute('class', 'wire' + (f.en ? ' on' : ''));
+  refs.ctl.textContent = `en=${fmt(f.en)} start=${fmt(f.start)} last=${fmt(f.last)}`;
+  refs.ctl2.textContent = `grp=${fmt(f.grp)}  y_valid=${fmt(f.y_valid)}`;
+
+  // Neurons
+  let active = 0, gated = 0;
+  for (let i = 0; i < N; i++) {
+    const t = refs.tiles[i];
+    const acc = signed(f.acc[i], AW), y = signed(f.y[i], AW);
+    t.acc.textContent = fmt(acc);
+    t.yv.textContent = 'y ' + fmt(y);
+    t.bg.style.fill = accColor(acc);
+    const loaded = f.ld_en && f.ld_row === i;
+    let cls = 'tile';
+    if (i === sel) cls += ' sel';
+    if (loaded) cls += ' loaded';
+    else if (f.en && f.last) cls += ' done';
+    t.g.setAttribute('class', cls);
+    for (let j = 0; j < 5; j++) {
+      const c = f.en ? field(f.wg[i], 2 * j, 2) : null;
+      t.lanes[j].setAttribute('class', c === 1 ? 'lane-pos' : c === 2 ? 'lane-neg' : 'lane-off');
+      t.lanes[j].setAttribute('opacity', f.en ? 1 : 0.35);
+      if (f.en) { if (c === 1 || c === 2) active++; else gated++; }
+    }
+  }
+
+  renderDetail(f, AW, G);
+  $('stats').innerHTML = [
+    ['Phase', phase],
+    ['Active lanes (add/sub)', f.en ? active : 0],
+    ['Gated lanes (weight 0)', f.en ? gated : 0],
+    ['Multiplications', 0],
+    ['Simulated time', `${(f.time / 1000).toFixed(0)} ns`],
+  ].map(([k, v]) => `<div class="stat"><span>${k}</span><b>${v}</b></div>`).join('');
+}
+
+function renderDetail(f, AW, G) {
+  const i = sel;
+  $('selname').textContent = i;
+  const wm = f.wmem[i];
+  let html = '<div class="muted" style="font-size:12px">Stored weights (wmem), one row per group of 5</div>';
+  for (let g = 0; g < G; g++) {
+    html += `<div class="mono">g${g} `;
+    for (let k = 0; k < 5; k++) {
+      const c = wm === null ? null : field(wm, 10 * g + 2 * k, 2);
+      const cls = c === 1 ? 'p' : c === 2 ? 'n' : 'z';
+      const cur = f.en && f.grp === g ? ' cur' : '';
+      html += `<span class="w ${cls}${cur}">${c === null ? '?' : wsym(c)}</span>`;
+    }
+    html += '</div>';
+  }
+  $('weights').innerHTML = html;
+
+  if (!f.en) {
+    $('lanes').innerHTML = '<tr><td style="text-align:left" class="muted">Not computing this cycle.</td></tr>';
+    $('sums').innerHTML = `<div class="stat"><span>acc</span><b>${fmt(signed(f.acc[i], AW))}</b></div>` +
+                          `<div class="stat"><span>y (last token result)</span><b>${fmt(signed(f.y[i], AW))}</b></div>`;
+    return;
+  }
+  let rows = '<tr><th>lane</th><th>x</th><th>w</th><th>term</th></tr>';
+  for (let j = 0; j < 5; j++) {
+    const x = laneX(f, j), w = code2w(field(f.wg[i], 2 * j, 2));
+    const term = w === 0 ? 'gated' : x * w;
+    rows += `<tr><td>${j}</td><td>${fmt(x)}</td><td>${w > 0 ? '+1' : w < 0 ? '-1' : '0'}</td><td>${term}</td></tr>`;
+  }
+  $('lanes').innerHTML = rows;
+  const base = f.start ? 0 : signed(f.acc_old[i], AW);
+  $('sums').innerHTML = [
+    ['s5 (sum of 5 lanes)', fmt(signed(f.s5[i], 11))],
+    [f.start ? 'base (start: reset to 0)' : 'base (previous acc)', fmt(base)],
+    ['sum = base + s5', fmt(signed(f.sum[i], AW))],
+    ['acc after this edge', fmt(signed(f.acc[i], AW))],
+    ['y' + (f.last ? ' (latched now)' : ''), fmt(signed(f.y[i], AW))],
+  ].map(([k, v]) => `<div class="stat"><span>${k}</span><b>${v}</b></div>`).join('');
+}
+
+// ------------------------------------------------------------ data + playback
+async function load(keepPos) {
+  const r = await fetch('/data', { cache: 'no-store' });
+  const d = await r.json();
+  $('log').textContent = d.log || '';
+  if (d.version === 0) { setStatus('waiting for first simulation run', 'run'); return; }
+  if (!d.frames || !d.frames.length) { setStatus(d.ok ? 'no data' : 'compile error', 'bad'); return; }
+  const rebuild = !data || data.N !== d.N || data.G !== d.G;
+  data = d;
+  maxAbs = 1;
+  for (const f of d.frames) for (const v of f.acc) { const s = signed(v, d.widths.acc); if (s !== null) maxAbs = Math.max(maxAbs, Math.abs(s)); }
+  if (rebuild) buildDiagram();
+  $('scrub').max = d.frames.length - 1;
+  if (!keepPos) idx = 0;
+  idx = Math.min(idx, d.frames.length - 1);
+  if (sel >= d.N) sel = 0;
+  if (!d.ok) setStatus(`run #${d.version} failed (showing previous data)`, 'bad');
+  else setStatus(`run #${d.version}: ${d.passed ? 'ALL CHECKS PASSED' : 'checks FAILED'} (${d.reason})`, d.passed ? 'ok' : 'bad');
+  render();
+}
+function setStatus(text, kind) { const s = $('status'); s.textContent = text; s.className = 'pill ' + (kind || ''); }
+
+function step(n) {
+  if (!data) return;
+  idx = Math.max(0, Math.min(data.frames.length - 1, idx + n));
+  render();
+  if (idx === data.frames.length - 1 && n > 0) setPlaying(false);
+}
+function setPlaying(p) {
+  playing = p; $('play').textContent = p ? 'Pause' : 'Play';
+  clearInterval(timer);
+  if (p) {
+    if (data && idx >= data.frames.length - 1) idx = 0;
+    timer = setInterval(() => step(1), 1000 / Number($('speed').value));
+  }
+}
+
+$('play').onclick = () => setPlaying(!playing);
+$('fwd').onclick = () => { setPlaying(false); step(1); };
+$('back').onclick = () => { setPlaying(false); step(-1); };
+$('scrub').oninput = (e) => { idx = Number(e.target.value); render(); };
+$('speed').oninput = (e) => { $('speedv').textContent = e.target.value; if (playing) setPlaying(true); };
+$('run').onclick = () => fetch('/run', { method: 'POST' });
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' && e.target.type !== 'range') return;
+  if (e.key === ' ') { e.preventDefault(); setPlaying(!playing); }
+  else if (e.key === 'ArrowRight') { setPlaying(false); step(1); }
+  else if (e.key === 'ArrowLeft') { setPlaying(false); step(-1); }
+});
+
+const es = new EventSource('/events');
+es.addEventListener('hello', () => load(false));
+es.addEventListener('running', (e) => setStatus('simulating: ' + JSON.parse(e.data).reason, 'run'));
+es.addEventListener('update', () => load(true));
+es.onerror = () => setStatus('server not reachable (is node viz/server.js running?)', 'bad');
+</script>
+</body>
+</html>

@@ -28,7 +28,9 @@ results and the version history.
 - Windows + VS Code, extension: mshr-h.veriloghdl
 - OSS CAD Suite in `oss-cad-suite/` (git-ignored), `bin` and `lib` on PATH
 - Yosys does not run under Git Bash (exit code 127); use PowerShell or cmd
-- No Graphviz and no Python installed
+- No Graphviz and no Python installed; Node.js is installed
+- Live viewer: `node viz/server.js` -> http://localhost:8090 (built-in modules
+  only; reads signals by name from tb.vcd, so update viz/ if they are renamed)
 - Tasks in `.vscode/tasks.json` (Ctrl+Shift+B = simulation), run via cmd.exe
 - iverilog needs `-g2012` for v3 (`$clog2` in parameters)
 - `cell` is a reserved word in Verilog; do not use it as a block name
