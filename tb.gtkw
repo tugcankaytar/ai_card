@@ -1,0 +1,40 @@
+[*] GTKWave view: open with  gtkwave tb.gtkw
+[dumpfile] "tb.vcd"
+[timestart] 0
+[size] 1400 700
+@200
+-Control
+@28
+tb.clk
+tb.rst
+tb.load
+@24
+tb.load_row[5:0]
+@28
+tb.en
+tb.start
+tb.last
+@24
+tb.grp[1:0]
+@200
+-Shared decoder (pipeline register)
+@22
+tb.dut.ld_w[39:0]
+@28
+tb.dut.ld_en
+@200
+-Neuron 0
+@22
+tb.dut.neuron[0].u.wmem[39:0]
+@420
+tb.dut.neuron[0].u.acc[15:0]
+tb.dut.neuron[0].u.y[15:0]
+@200
+-Neuron 1
+@420
+tb.dut.neuron[1].u.acc[15:0]
+tb.dut.neuron[1].u.y[15:0]
+@200
+-Output
+@28
+tb.y_valid

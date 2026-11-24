@@ -1,0 +1,23 @@
+# Toolchain (large; install separately, see README)
+oss-cad-suite/
+
+# Older versions (kept locally only)
+archive/
+
+# Simulation and synthesis outputs
+sim
+sim_*
+*.vcd
+*.fst
+*.ghw
+yosys_*.txt
+
+# Local tool and editor state
+.claude/
+.vscode/settings.json
+node_modules/
+
+# OS files
+Thumbs.db
+desktop.ini
+.DS_Store

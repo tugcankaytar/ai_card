@@ -1,0 +1,39 @@
+{
+    "version": "2.0.0",
+    "options": {
+        "shell": { "executable": "cmd.exe", "args": ["/d", "/c"] }
+    },
+    "tasks": [
+        {
+            "label": "Simulate",
+            "type": "shell",
+            "command": "iverilog -g2012 -o sim pkt_decoder.v ws_cell.v ws_array.v tb.v && vvp -n sim",
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": []
+        },
+        {
+            "label": "Waveforms (GTKWave)",
+            "type": "shell",
+            "command": "gtkwave tb.gtkw",
+            "problemMatcher": []
+        },
+        {
+            "label": "Gate count: pkt_decoder",
+            "type": "shell",
+            "command": "yosys -q -p \"read_verilog pkt_decoder.v; synth -top pkt_decoder; tee -o yosys_pkt_decoder.txt stat; tee -a yosys_pkt_decoder.txt ltp -noff\" && type yosys_pkt_decoder.txt",
+            "problemMatcher": []
+        },
+        {
+            "label": "Gate count: ws_cell",
+            "type": "shell",
+            "command": "yosys -q -p \"read_verilog -sv ws_cell.v; synth -top ws_cell; tee -o yosys_ws_cell.txt stat; tee -a yosys_ws_cell.txt ltp -noff\" && type yosys_ws_cell.txt",
+            "problemMatcher": []
+        },
+        {
+            "label": "Gate count: ws_array (64 neurons, slow)",
+            "type": "shell",
+            "command": "yosys -q -p \"read_verilog -sv pkt_decoder.v ws_cell.v ws_array.v; synth -flatten -top ws_array; tee -o yosys_ws_array.txt stat\" && type yosys_ws_array.txt",
+            "problemMatcher": []
+        }
+    ]
+}
